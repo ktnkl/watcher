@@ -11,11 +11,59 @@ type Server struct {
 	Url string
 }
 
-func worker(id int, in <-chan Server, out chan<- string) {
+type Timer interface {
+	Sleep(time.Duration)
+	Now() time.Time
+}
+
+type Logger interface {
+	Printf(format string, args ...interface{})
+}
+
+type RealTimer struct{}
+
+func (RealTimer) Now() time.Time {
+	return time.Now()
+}
+
+func (RealTimer) Sleep(d time.Duration) {
+	time.Sleep(d)
+}
+
+type RealLogger struct{}
+
+func (RealLogger) Printf(format string, args ...interface{}) {
+	fmt.Printf(format, args...)
+}
+
+type MockTimer struct {
+	NowTime       time.Time
+	SleepCalled   bool
+	SleepDuration time.Duration
+}
+
+func (m *MockTimer) Now() time.Time {
+	return m.NowTime
+}
+
+func (m *MockTimer) Sleep(d time.Duration) {
+	m.SleepCalled = true
+	m.SleepDuration = d
+}
+
+type MockLogger struct {
+	Messages []string
+}
+
+func (m *MockLogger) Printf(format string, args ...interface{}) {
+	m.Messages = append(m.Messages, fmt.Sprintf(format, args...))
+}
+
+func worker(id int, in <-chan Server, out chan<- string, timer Timer, logger Logger) {
 	for server := range in {
-		fmt.Printf("worker %d check url %s\n", id, server.Url)
-		time.Sleep(3 * time.Second)
-		out <- fmt.Sprintf("url %s checked at %s", server.Url, time.Now())
+		logger.Printf("worker %d check url %s\n", id, server.Url)
+		timer.Sleep(3 * time.Second)
+		out <- fmt.Sprintf("url %s checked at %s", server.Url, timer.Now())
 	}
 }
 
@@ -42,9 +90,12 @@ func checkServers() {
 	out := make(chan string, qty)
 	done := make(chan struct{})
 
+	timer := RealTimer{}
+	logger := RealLogger{}
+
 	for i := range workersCont {
 		wg.Go(func() {
-			worker(i, in, out)
+			worker(i, in, out, timer, logger)
 		})
 	}
 
