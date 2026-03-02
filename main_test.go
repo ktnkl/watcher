@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -75,8 +76,9 @@ func TestWorkerTableDriven(t *testing.T) {
 			timer := &MockTimer{NowTime: time.Now()}
 			logger := &MockLogger{}
 
-			wg.Add(1)
-			go worker(1, in, out, timer, logger)
+			wg.Go(func() {
+				worker(1, in, out, timer, logger)
+			})
 
 			for _, server := range tt.servers {
 				in <- server
@@ -89,17 +91,28 @@ func TestWorkerTableDriven(t *testing.T) {
 			result := make([]string, tt.qty)
 
 			for i := range tt.qty {
-				// select {
-				// case server := <-out:
-				// 	result[i] = server
-				// }
 				server := <-out
 				result[i] = server
+			}
+
+			if !timer.SleepCalled {
+				t.Error("worker не вызвал sleep")
+			}
+
+			if len(logger.Messages) != tt.qty {
+				t.Error("worker не логгировал")
 			}
 
 			if len(result) != len(tt.wantedUrl) {
 				t.Error("Кол-во ожидаемых и полученных результатов не совпадает")
 			}
+
+			for i, result := range result {
+				if !strings.Contains(result, tt.wantedUrl[i]) {
+					t.Error("Ожидаемые ответы не сопадают с реальными")
+				}
+			}
+
 		})
 	}
 
