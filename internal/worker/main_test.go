@@ -1,4 +1,4 @@
-package main
+package worker_test
 
 import (
 	"fmt"
@@ -6,13 +6,16 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"watcher/internal/domain"
+	"watcher/internal/worker"
+	"watcher/pkg/mock"
 )
 
-func CreateTestServers(count int) []Server {
-	servers := make([]Server, count)
+func CreateTestServers(count int) []domain.Server {
+	servers := make([]domain.Server, count)
 
 	for c := range count {
-		servers[c] = Server{
+		servers[c] = domain.Server{
 			Id:  c,
 			Url: fmt.Sprintf("https://test%d.com", c),
 		}
@@ -22,14 +25,14 @@ func CreateTestServers(count int) []Server {
 }
 
 func TestWorker(t *testing.T) {
-	in := make(chan Server, 1)
+	in := make(chan domain.Server, 1)
 	out := make(chan string, 1)
-	timer := &MockTimer{NowTime: time.Now()}
-	logger := &MockLogger{}
+	timer := &mock.MockTimer{NowTime: time.Now()}
+	logger := &mock.MockLogger{}
 
-	go worker(1, in, out, timer, logger)
+	go worker.Worker(1, in, out, timer, logger)
 
-	in <- Server{Id: 1, Url: "https://test1.com"}
+	in <- domain.Server{Id: 1, Url: "https://test1.com"}
 	close(in)
 
 	result := <-out
@@ -50,7 +53,7 @@ func TestWorker(t *testing.T) {
 func TestWorkerTableDriven(t *testing.T) {
 	var tests = []struct {
 		qty       int
-		servers   []Server
+		servers   []domain.Server
 		wantedUrl []string
 	}{
 		{
@@ -70,14 +73,14 @@ func TestWorkerTableDriven(t *testing.T) {
 
 		t.Run(testname, func(t *testing.T) {
 			var wg sync.WaitGroup
-			in := make(chan Server, tt.qty)
+			in := make(chan domain.Server, tt.qty)
 			out := make(chan string, tt.qty)
 
-			timer := &MockTimer{NowTime: time.Now()}
-			logger := &MockLogger{}
+			timer := &mock.MockTimer{NowTime: time.Now()}
+			logger := &mock.MockLogger{}
 
 			wg.Go(func() {
-				worker(1, in, out, timer, logger)
+				worker.Worker(1, in, out, timer, logger)
 			})
 
 			for _, server := range tt.servers {
